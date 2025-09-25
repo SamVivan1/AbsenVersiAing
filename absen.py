@@ -24,10 +24,35 @@ try:
     ).send_keys(USERNAME)
     driver.find_element(By.NAME, "password").send_keys(PASSWORD)
     driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
-    time.sleep(2)
 
-    if "login" in driver.current_url.lower():
+    # Tunggu apakah login berhasil atau muncul pesan error
+    login_failed = False
+    try:
+        # Tunggu sampai alert error muncul, atau timeout jika tidak ada
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div.alert.alert-danger.icons-alert"))
+        )
+        login_failed = True
+    except:
+        # Tidak ada alert error, lanjutkan cek url
+        pass
+
+    if login_failed or "login" in driver.current_url.lower():
         print("❌ Gagal login.")
+        # Cek pesan error pada elemen alert
+        try:
+            alert_div = driver.find_element(By.CSS_SELECTOR, "div.alert.alert-danger.icons-alert")
+            error_message = alert_div.text.strip()
+            if error_message:
+                print(f"🔒 Pesan error: {error_message}")
+                if "username" in error_message.lower() or "password" in error_message.lower():
+                    print("⚠ Username atau password salah.")
+                    driver.quit()
+                    exit()
+            else:
+                print("⚠ Username atau password kemungkinan salah, atau ada masalah lain saat login.")
+        except Exception:
+            print("⚠ Username atau password kemungkinan salah, atau ada masalah lain saat login.")
         driver.quit()
         exit()
 
