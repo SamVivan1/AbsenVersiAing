@@ -11,11 +11,9 @@ PASSWORD = ""  # ganti sendiri
 
 # Setup browser
 options = Options()
-# options.add_argument("--headless")
+options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--remote-debugging-port=9222")  # penting buat headless
-options.add_argument("--user-data-dir=/tmp/chrome-data")  # custom dir sementara
 driver = webdriver.Chrome(options=options)
 
 try:
