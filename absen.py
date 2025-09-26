@@ -6,12 +6,12 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 
 # --- Ganti dengan akunmu ---
-USERNAME = "2304111010054"
-PASSWORD = "52479618"  # ganti sendiri
+USERNAME = ""
+PASSWORD = ""  # ganti sendiri
 
 # Setup browser
 options = Options()
-#options.add_argument("--headless")
+options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 driver = webdriver.Chrome(options=options)
