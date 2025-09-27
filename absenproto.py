@@ -7,8 +7,8 @@ import time
 import logging
 
 # --- Ganti dengan akunmu ---
-USERNAME = "2304111010054"
-PASSWORD = "52479618"  # ganti sendiri
+USERNAME = ""
+PASSWORD = ""  # ganti sendiri
 
 # Setup logging
 logging.basicConfig(
