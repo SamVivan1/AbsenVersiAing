@@ -1,4 +1,4 @@
-import { Clock, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react'
+import { Clock, CircleCheck as CheckCircle, Circle as XCircle, CircleAlert as AlertCircle, Info } from 'lucide-react'
 import { AttendanceLog } from '../types'
 import { cn } from '../utils/cn'
 

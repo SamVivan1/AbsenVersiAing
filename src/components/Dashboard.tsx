@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Activity, CheckCircle, XCircle, Clock, Zap } from 'lucide-react'
+import { Activity, CircleCheck as CheckCircle, Circle as XCircle, Clock, Zap } from 'lucide-react'
 import StatsCard from './StatsCard'
 import RecentActivity from './RecentActivity'
 import ConfigPanel from './ConfigPanel'

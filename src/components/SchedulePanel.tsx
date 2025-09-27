@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Calendar, Clock, MoreVertical, Edit, Trash2, Power } from 'lucide-react'
+import { Plus, Calendar, Clock, MoveVertical as MoreVertical, CreditCard as Edit, Trash2, Power } from 'lucide-react'
 import { Schedule } from '../types'
 import { cn } from '../utils/cn'
 

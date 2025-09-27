@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Download, Filter, FileText, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react'
+import { Search, Download, ListFilter as Filter, FileText, CircleCheck as CheckCircle, Circle as XCircle, CircleAlert as AlertCircle, Info } from 'lucide-react'
 import { AttendanceLog } from '../types'
 import { cn } from '../utils/cn'
 
