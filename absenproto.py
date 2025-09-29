@@ -5,17 +5,28 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import logging
+import traceback
 
 # --- Ganti dengan akunmu ---
 USERNAME = "2304111010054"
 PASSWORD = "52479618"  # ganti sendiri
 
-# Setup logging
-logging.basicConfig(
-    filename="absen.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# --- Setup logging ---
+logger = logging.getLogger("AbsenLogger")
+logger.setLevel(logging.DEBUG)
+
+# File handler (log lengkap)
+fh = logging.FileHandler("absen.log")
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+
+# Console handler (log ringkas)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+ch.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 # Setup browser
 options = Options()
@@ -44,23 +55,9 @@ try:
         pass
 
     if login_failed or "login" in driver.current_url.lower():
-        print("❌ Gagal login.")
-        try:
-            alert_div = driver.find_element(By.CSS_SELECTOR, "div.alert.alert-danger.icons-alert")
-            error_message = alert_div.text.strip()
-            if error_message:
-                print(f"🔒 Pesan error: {error_message}")
-                if "username" in error_message.lower() or "password" in error_message.lower():
-                    print("⚠ Username atau password salah.")
-                    logging.warning("Login gagal: Username/Password salah.")
-                    driver.quit()
-                    exit()
-            else:
-                print("⚠ Username atau password kemungkinan salah, atau ada masalah lain saat login.")
-                logging.warning("Login gagal: kemungkinan salah username/password.")
-        except Exception:
-            print("⚠ Username atau password kemungkinan salah, atau ada masalah lain saat login.")
-            logging.warning("Login gagal: error tidak diketahui.")
+        msg = "❌ Gagal login."
+        print(msg)
+        logger.warning("Login gagal: kemungkinan salah username/password.")
         driver.quit()
         exit()
 
@@ -78,48 +75,65 @@ try:
         if belum_masuk:
             msg = "ℹ Belum masuk waktu absen (tidak ada jadwal absen saat ini)."
             print(msg)
-            logging.info(msg)
+            logger.info(msg)
             anomali.append("Belum masuk waktu absen.")
     except Exception:
         # Jika tidak ada pesan "Belum masuk waktu absen", cek apakah sudah absen
         try:
             sudah_absen_p = driver.find_element(By.XPATH, "//p[contains(., 'Anda sudah absen')]")
             if sudah_absen_p:
-                print("ℹ Anda sudah absen hari ini.")
-                logging.info("Sudah absen hari ini.")
+                msg = "ℹ Anda sudah absen hari ini."
+                print(msg)
+                logger.info(msg)
                 anomali.append("Sudah absen, tidak ada proses absen.")
         except Exception:
             # Jika belum absen, lanjutkan proses absen
             try:
                 absen_buttons = driver.find_elements(By.CSS_SELECTOR, ".btn.btn-success")
                 if not absen_buttons:
-                    print("ℹ Tidak ada tombol absen (mungkin tidak ada jadwal).")
-                    logging.info("Tidak ada tombol absen ditemukan.")
+                    msg = "ℹ Tidak ada tombol absen (mungkin tidak ada jadwal)."
+                    print(msg)
+                    logger.info(msg)
                     anomali.append("Tidak ada tombol absen ditemukan.")
                 else:
-                    print(f"🔎 Ditemukan {len(absen_buttons)} jadwal absen.")
-                    logging.info(f"Ditemukan {len(absen_buttons)} jadwal absen.")
+                    msg = f"🔎 Ditemukan {len(absen_buttons)} jadwal absen."
+                    print(msg)
+                    logger.info(msg)
                     for idx, absen_button in enumerate(absen_buttons, 1):
                         try:
-                            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-success")))
+                            WebDriverWait(driver, 5).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-success"))
+                            )
                             absen_button.click()
                             time.sleep(1)
                             konfirmasi_button = WebDriverWait(driver, 5).until(
                                 EC.element_to_be_clickable((By.CLASS_NAME, "confirm"))
                             )
                             konfirmasi_button.click()
-                            print(f"✅ Absen ke-{idx} berhasil!")
-                            logging.info(f"Absen ke-{idx} berhasil.")
+                            msg = f"✅ Absen ke-{idx} berhasil!"
+                            print(msg)
+                            logger.info(msg)
                             absen_berhasil += 1
                         except Exception as e_btn:
-                            print(f"❌ Gagal absen ke-{idx}: {e_btn}")
-                            logging.error(f"Gagal absen ke-{idx}: {e_btn}")
+                            # Console log singkat
+                            err_type = type(e_btn).__name__
+                            err_msg = str(e_btn).split("\n")[0]
+                            simple_err = f"Gagal absen ke-{idx}: {err_type} - {err_msg}"
+                            print(f"❌ {simple_err}")
+
+                            # File log lengkap
+                            logger.error(f"Gagal absen ke-{idx}:\n{traceback.format_exc()}")
+
                             absen_gagal += 1
-                            anomali.append(f"Gagal absen ke-{idx}: {e_btn}")
+                            anomali.append(simple_err)
             except Exception as e:
-                print(f"⚠ Error saat proses absen: {e}")
-                logging.error(f"Error saat proses absen: {e}")
-                anomali.append(f"Error proses absen: {e}")
+                err_type = type(e).__name__
+                err_msg = str(e).split("\n")[0]
+                simple_err = f"Error saat proses absen: {err_type} - {err_msg}"
+
+                print(f"⚠ {simple_err}")
+                logger.error(f"Error saat proses absen:\n{traceback.format_exc()}")
+                anomali.append(simple_err)
 
     print("\n--- Ringkasan Logging ---")
     print(f"Jumlah absen berhasil: {absen_berhasil}")
@@ -130,8 +144,12 @@ try:
             print(f"- {a}")
 
 except Exception as e:
-    print("⚠ Error:", e)
-    logging.error(f"Error global: {e}")
+    err_type = type(e).__name__
+    err_msg = str(e).split("\n")[0]
+    simple_err = f"Error global: {err_type} - {err_msg}"
+
+    print(f"⚠ {simple_err}")
+    logger.error(f"Error global:\n{traceback.format_exc()}")
 
 finally:
     driver.quit()
