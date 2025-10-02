@@ -78,72 +78,62 @@ try:
             logger.info(msg)
             anomali.append("Belum masuk waktu absen.")
     except Exception:
-        # Jika tidak ada pesan "Belum masuk waktu absen", cek apakah sudah absen
+        # Langsung iterasi semua card absensi
         try:
-            sudah_absen_p = driver.find_element(By.XPATH, "//p[contains(., 'Anda sudah absen')]")
-            if sudah_absen_p:
-                msg = "ℹ Anda sudah absen hari ini."
+            cards = driver.find_elements(By.CSS_SELECTOR, ".card")
+            absen_idx = 0
+            absen_berhasil_sebelum = absen_berhasil
+            for card in cards:
+                try:
+                    info_texts = card.text.lower()
+                    absen_idx += 1
+                    if "anda belum absen" in info_texts:
+                        try:
+                            absen_button = card.find_element(By.CSS_SELECTOR, "button.btn.btn-success[id^='konfirmasi-kehadiran']")
+                        except Exception:
+                            msg = f"❌ Tidak ditemukan tombol absen pada jadwal ke-{absen_idx}."
+                            print(msg)
+                            logger.warning(msg)
+                            anomali.append(f"Tidak ditemukan tombol absen pada jadwal ke-{absen_idx}.")
+                            continue
+                        WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, f"button.btn.btn-success[id^='konfirmasi-kehadiran']"))
+                        )
+                        absen_button.click()
+                        time.sleep(1)
+                        konfirmasi_button = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.CLASS_NAME, "confirm"))
+                        )
+                        konfirmasi_button.click()
+                        msg = f"✅ Absen ke-{absen_idx} berhasil!"
+                        print(msg)
+                        logger.info(msg)
+                        absen_berhasil += 1
+                    elif "anda sudah absen" in info_texts:
+                        msg = f"ℹ Jadwal ke-{absen_idx} sudah absen."
+                        print(msg)
+                        logger.info(msg)
+                        anomali.append(f"Jadwal ke-{absen_idx} sudah absen.")
+                except Exception as e_btn:
+                    err_type = type(e_btn).__name__
+                    err_msg = str(e_btn).split("\n")[0]
+                    simple_err = f"Gagal absen ke-{absen_idx}: {err_type} - {err_msg}"
+                    print(f"❌ {simple_err}")
+                    logger.error(f"Gagal absen ke-{absen_idx}:\n{traceback.format_exc()}")
+                    absen_gagal += 1
+                    anomali.append(simple_err)
+            if absen_berhasil == absen_berhasil_sebelum:
+                msg = "ℹ Tidak ada jadwal absen yang bisa dikonfirmasi."
                 print(msg)
                 logger.info(msg)
-                anomali.append("Sudah absen, tidak ada proses absen.")
-        except Exception:
-            # Jika belum absen, lanjutkan proses absen
-            try:
-                absen_buttons = driver.find_elements(By.CSS_SELECTOR, "button.btn.btn-success[id^='konfirmasi-kehadiran']")
-                if not absen_buttons:
-                    msg = "ℹ Tidak ada tombol absen (mungkin tidak ada jadwal)."
-                    print(msg)
-                    logger.info(msg)
-                    anomali.append("Tidak ada tombol absen ditemukan.")
-                else:
-                    msg = f"🔎 Ditemukan {len(absen_buttons)} jadwal absen."
-                    print(msg)
-                    logger.info(msg)
-                    for idx, absen_button in enumerate(absen_buttons, 1):
-                        try:
-                            # Cek apakah tombol sudah disabled atau ada tulisan sudah absen di parent/element terkait
-                            parent = absen_button.find_element(By.XPATH, "..")
-                            sudah_absen = False
-                            # Cek apakah ada tulisan 'sudah absen' di parent atau tombol disabled
-                            if 'disabled' in absen_button.get_attribute('class').lower() or 'sudah absen' in parent.text.lower():
-                                msg = f"ℹ Jadwal ke-{idx} sudah absen."
-                                print(msg)
-                                logger.info(msg)
-                                anomali.append(f"Jadwal ke-{idx} sudah absen.")
-                                continue
-                            WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, f"button.btn.btn-success[id^='konfirmasi-kehadiran']"))
-                            )
-                            absen_button.click()
-                            time.sleep(1)
-                            konfirmasi_button = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.CLASS_NAME, "confirm"))
-                            )
-                            konfirmasi_button.click()
-                            msg = f"✅ Absen ke-{idx} berhasil!"
-                            print(msg)
-                            logger.info(msg)
-                            absen_berhasil += 1
-                        except Exception as e_btn:
-                            # Console log singkat
-                            err_type = type(e_btn).__name__
-                            err_msg = str(e_btn).split("\n")[0]
-                            simple_err = f"Gagal absen ke-{idx}: {err_type} - {err_msg}"
-                            print(f"❌ {simple_err}")
-
-                            # File log lengkap
-                            logger.error(f"Gagal absen ke-{idx}:\n{traceback.format_exc()}")
-
-                            absen_gagal += 1
-                            anomali.append(simple_err)
-            except Exception as e:
-                err_type = type(e).__name__
-                err_msg = str(e).split("\n")[0]
-                simple_err = f"Error saat proses absen: {err_type} - {err_msg}"
-
-                print(f"⚠ {simple_err}")
-                logger.error(f"Error saat proses absen:\n{traceback.format_exc()}")
-                anomali.append(simple_err)
+                anomali.append("Tidak ada jadwal absen yang bisa dikonfirmasi.")
+        except Exception as e:
+            err_type = type(e).__name__
+            err_msg = str(e).split("\n")[0]
+            simple_err = f"Error saat proses absen: {err_type} - {err_msg}"
+            print(f"⚠ {simple_err}")
+            logger.error(f"Error saat proses absen:\n{traceback.format_exc()}")
+            anomali.append(simple_err)
 
     print("\n--- Ringkasan Logging ---")
     print(f"Jumlah absen berhasil: {absen_berhasil}")
