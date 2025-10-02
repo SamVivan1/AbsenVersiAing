@@ -8,8 +8,8 @@ import logging
 import traceback
 
 # --- Ganti dengan akunmu ---
-USERNAME = ""
-PASSWORD = ""  # ganti sendiri
+USERNAME = "2304111010054"
+PASSWORD = "52479618"  # ganti sendiri
 
 # --- Setup logging ---
 logger = logging.getLogger("AbsenLogger")
@@ -89,7 +89,7 @@ try:
         except Exception:
             # Jika belum absen, lanjutkan proses absen
             try:
-                absen_buttons = driver.find_elements(By.CSS_SELECTOR, ".btn.btn-success")
+                absen_buttons = driver.find_elements(By.CSS_SELECTOR, "button.btn.btn-success[id^='konfirmasi-kehadiran']")
                 if not absen_buttons:
                     msg = "ℹ Tidak ada tombol absen (mungkin tidak ada jadwal)."
                     print(msg)
@@ -101,8 +101,18 @@ try:
                     logger.info(msg)
                     for idx, absen_button in enumerate(absen_buttons, 1):
                         try:
+                            # Cek apakah tombol sudah disabled atau ada tulisan sudah absen di parent/element terkait
+                            parent = absen_button.find_element(By.XPATH, "..")
+                            sudah_absen = False
+                            # Cek apakah ada tulisan 'sudah absen' di parent atau tombol disabled
+                            if 'disabled' in absen_button.get_attribute('class').lower() or 'sudah absen' in parent.text.lower():
+                                msg = f"ℹ Jadwal ke-{idx} sudah absen."
+                                print(msg)
+                                logger.info(msg)
+                                anomali.append(f"Jadwal ke-{idx} sudah absen.")
+                                continue
                             WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-success"))
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, f"button.btn.btn-success[id^='konfirmasi-kehadiran']"))
                             )
                             absen_button.click()
                             time.sleep(1)
