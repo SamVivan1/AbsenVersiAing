@@ -10,8 +10,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # --- Ganti dengan akunmu ---
-USERNAME = "2304111010054"
-PASSWORD = "52479618"  # ganti sendiri
+USERNAME = ""
+PASSWORD = ""  # ganti sendiri
 
 # --- Persiapan direktori log ---
 today_str = datetime.datetime.now().strftime("%d-%m-%Y")
