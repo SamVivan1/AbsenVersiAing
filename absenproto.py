@@ -3,29 +3,47 @@ import time
 import logging
 import traceback
 import datetime
+from zoneinfo import ZoneInfo
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from dotenv import load_dotenv
 
-# --- Ganti dengan akunmu ---
-USERNAME = ""
-PASSWORD = ""  # ganti sendiri
+# Helper function untuk mendapatkan timestamp yang aman untuk nama file
+def get_timestamp():
+    """Mengembalikan timestamp format DD-MM-YYYY_HH-MM-SS"""
+    # Menggunakan Asia/Jakarta karena Simkuliah menggunakan Waktu Indonesia Barat
+    return datetime.datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%d-%m-%Y_%H-%M-%S")
+
+# --- Muat variabel dari file .env ---
+load_dotenv('.env.local')  # Ubah sesuai nama file .env Anda
+NPM = os.getenv("NPM")
+PASSWORD = os.getenv("PASSWORD")
+
+# --- Validasi kredensial ---
+if not NPM or not PASSWORD:
+    print("❌ ERROR: NPM atau Password tidak ditemukan di file .env.")
+    exit()
 
 # --- Persiapan direktori log ---
-today_str = datetime.datetime.now().strftime("%d-%m-%Y")
-photo_dir = f"log/error/photo/{today_str}"
-log_dir = f"log/error/log/{today_str}"
+# Struktur direktori sekarang tanpa sub-folder tanggalan
+photo_dir = "log/error/photo"
+log_dir = "log/error/log"
 os.makedirs(photo_dir, exist_ok=True)
 os.makedirs(log_dir, exist_ok=True)
+
+# Nama file log harian
+today_str = datetime.datetime.now().strftime("%d-%m-%Y")
+log_filename = f"{log_dir}/error_{today_str}.log"
 
 # --- Setup logging ---
 logger = logging.getLogger("AbsenLogger")
 logger.setLevel(logging.DEBUG)
 
 # File handler (log lengkap harian)
-fh = logging.FileHandler(f"{log_dir}/error.log")
+fh = logging.FileHandler(log_filename)
 fh.setLevel(logging.DEBUG)
 fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 
@@ -34,6 +52,10 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 ch.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
 
+# Hapus handler yang mungkin sudah ada dari run sebelumnya
+if logger.hasHandlers():
+    logger.handlers.clear()
+    
 logger.addHandler(fh)
 logger.addHandler(ch)
 
@@ -47,11 +69,14 @@ options.add_argument(
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 )
 driver = webdriver.Chrome(options=options)
+logger.info("Driver Chrome berhasil diinisialisasi.")
+
 
 try:
     # --- Login ---
+    logger.info("Mencoba login...")
     driver.get("https://simkuliah.usk.ac.id/")
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(USERNAME)
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(NPM)
     driver.find_element(By.NAME, "password").send_keys(PASSWORD)
     driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
     time.sleep(2)
@@ -70,9 +95,12 @@ try:
         msg = "❌ Gagal login: kemungkinan salah username/password atau CAPTCHA."
         print(msg)
         logger.warning(msg)
-        driver.save_screenshot(f"{photo_dir}/login_failed.png")
+        # Penamaan screenshot dengan timestamp
+        driver.save_screenshot(f"{photo_dir}/login_failed_{get_timestamp()}.png")
         driver.quit()
         exit()
+    
+    logger.info("Login berhasil. Menuju halaman absensi.")
 
     # --- Masuk halaman absensi ---
     driver.get("https://simkuliah.usk.ac.id/index.php/absensi")
@@ -84,46 +112,58 @@ try:
 
     # --- Deteksi pesan 'Belum masuk waktu absen' ---
     try:
-        belum_masuk = driver.find_element(By.XPATH, "//p[contains(., 'Belum masuk waktu absen')]")
-        if belum_masuk:
-            msg = "ℹ Belum masuk waktu absen (tidak ada jadwal absen saat ini)."
-            print(msg)
-            logger.info(msg)
-            anomali.append("Belum masuk waktu absen.")
-    except Exception:
-        # --- Jika tidak ada pesan itu, lanjutkan deteksi tombol absen ---
+        # Cek apakah elemen ini ada (berarti tidak ada jadwal)
+        driver.find_element(By.XPATH, "//p[contains(., 'Belum masuk waktu absen')]")
+        msg = "ℹ Belum masuk waktu absen (tidak ada jadwal absen saat ini)."
+        print(msg)
+        logger.info(msg)
+        anomali.append("Belum masuk waktu absen.")
+        
+    except Exception as no_time_e:
+        # Jika tidak ada pesan itu, lanjutkan deteksi tombol absen
         try:
+            # Ambil semua tombol absen yang ditemukan saat ini
             absen_buttons = driver.find_elements(By.CSS_SELECTOR, ".btn.btn-success")
+            
             if not absen_buttons:
                 msg = "ℹ Tidak ada tombol absen ditemukan (mungkin tidak ada jadwal)."
                 print(msg)
                 logger.info(msg)
                 anomali.append("Tidak ada tombol absen ditemukan.")
             else:
-                msg = f"🔎 Ditemukan {len(absen_buttons)} jadwal absen."
+                msg = f"🔎 Ditemukan {len(absen_buttons)} jadwal absen yang tersedia."
                 print(msg)
                 logger.info(msg)
 
-                # --- Lakukan maksimal 2 kali percobaan absen ---
+                # --- Lakukan iterasi berdasarkan jumlah tombol yang ditemukan, maks 2 kali ---
                 percobaan = min(2, len(absen_buttons))
+                
                 for i in range(percobaan):
                     try:
-                        absen_button = absen_buttons[i]
+                        # Re-locate tombol dengan WebDriverWait (mencari tombol pertama yang muncul)
+                        absen_button = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-success"))
+                        )
+
                         logger.info(f"Percobaan absen ke-{i+1} dimulai.")
+                        
+                        # KLIK TOMBOL ABSEN
                         driver.execute_script("arguments[0].click();", absen_button)
                         time.sleep(2)
 
+                        # KLIK TOMBOL KONFIRMASI (Pop-up SweetAlert)
                         konfirmasi_button = WebDriverWait(driver, 10).until(
                             EC.element_to_be_clickable((By.CLASS_NAME, "confirm"))
                         )
                         driver.execute_script("arguments[0].click();", konfirmasi_button)
-                        time.sleep(2)
+                        time.sleep(3) # Tunggu SweetAlert hilang dan DOM diperbarui
 
                         msg = f"✅ Absen ke-{i+1} berhasil!"
                         print(msg)
                         logger.info(msg)
                         absen_berhasil += 1
-                        time.sleep(3)
+                        
+                        # Setelah sukses, skrip akan mengulangi loop dan mencari tombol sukses berikutnya yang tersisa.
 
                     except Exception as e_btn:
                         err_type = type(e_btn).__name__
@@ -131,7 +171,8 @@ try:
                         msg = f"❌ Gagal absen ke-{i+1}: {err_type} - {err_msg}"
                         print(msg)
                         logger.error(f"{msg}\n{traceback.format_exc()}")
-                        driver.save_screenshot(f"{photo_dir}/error_absen_{i+1}.png")
+                        # Penamaan screenshot dengan timestamp
+                        driver.save_screenshot(f"{photo_dir}/error_absen_{i+1}_{get_timestamp()}.png")
                         absen_gagal += 1
                         anomali.append(msg)
                         break
@@ -141,7 +182,8 @@ try:
             msg = f"⚠ Error saat proses absen: {err_type} - {err_msg}"
             print(msg)
             logger.error(f"{msg}\n{traceback.format_exc()}")
-            driver.save_screenshot(f"{photo_dir}/error_proses.png")
+            # Penamaan screenshot dengan timestamp
+            driver.save_screenshot(f"{photo_dir}/error_proses_{get_timestamp()}.png")
             anomali.append(msg)
 
     # --- Ringkasan ---
@@ -161,7 +203,14 @@ except Exception as e:
     simple_err = f"⚠ Error global: {err_type} - {err_msg}"
     print(simple_err)
     logger.error(f"{simple_err}\n{traceback.format_exc()}")
-    driver.save_screenshot(f"{photo_dir}/error_global.png")
+    
+    if 'driver' in locals() and driver:
+        # Penamaan screenshot dengan timestamp
+        driver.save_screenshot(f"{photo_dir}/error_global_{get_timestamp()}.png")
 
 finally:
-    driver.quit()
+    if 'driver' in locals() and driver:
+        try:
+            driver.quit()
+        except Exception as quit_e:
+            logger.warning(f"Gagal menutup driver: {quit_e}")
