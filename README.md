@@ -19,11 +19,11 @@ Script Python ini digunakan untuk melakukan absensi otomatis pada website [simku
 2. 🌐 **Install Google Chrome**  
    Script ini menggunakan Chrome WebDriver, pastikan browser Google Chrome sudah terpasang.
 
-3. 📦 **Install Selenium dan ChromeDriver**  
-   Jalankan perintah berikut di terminal:
+3. 📦 **Install Dependencies dan ChromeDriver**  
+   Jalankan perintah berikut di terminal untuk menginstal semua kebutuhan library (Selenium, ddddocr, dotenv):
 
    ```pwsh
-   pip install selenium
+   pip install -r requirements.txt
    ```
 
    Download ChromeDriver yang sesuai dengan versi Chrome Anda dari [sini](https://chromedriver.chromium.org/downloads) dan letakkan di folder yang sudah ada di PATH atau satu folder dengan script.
