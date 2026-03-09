@@ -10,6 +10,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
+import ddddocr
+
+# Initialize global ddddocr instance
+ocr = ddddocr.DdddOcr(show_ad=False)
 
 # Helper function untuk mendapatkan timestamp yang aman untuk nama file
 def get_timestamp():
@@ -61,7 +65,7 @@ logger.addHandler(ch)
 
 # --- Setup browser ---
 options = Options()
-# options.add_argument("--headless")
+#options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument(
@@ -73,35 +77,72 @@ logger.info("Driver Chrome berhasil diinisialisasi.")
 
 
 try:
-    # --- Login ---
-    logger.info("Mencoba login...")
-    driver.get("https://simkuliah.usk.ac.id/")
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(NPM)
-    driver.find_element(By.NAME, "password").send_keys(PASSWORD)
-    driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
-    time.sleep(2)
+    MAX_LOGIN_RETRIES = 3
+    login_success = False
 
-    # --- Deteksi login gagal ---
-    login_failed = False
-    try:
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "div.alert.alert-danger.icons-alert"))
-        )
-        login_failed = True
-    except:
-        pass
+    for attempt in range(MAX_LOGIN_RETRIES):
+        # --- Login ---
+        logger.info(f"Mencoba login (Percobaan {attempt + 1}/{MAX_LOGIN_RETRIES})...")
+        driver.get("https://simkuliah.usk.ac.id/")
+        
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(NPM)
+        driver.find_element(By.NAME, "password").send_keys(PASSWORD)
+        
+        # --- Handle CAPTCHA ---
+        try:
+            # Cari elemen image captcha
+            captcha_img_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, "captcha-img"))
+            )
+            logger.info("CAPTCHA terdeteksi, mencoba menyelesaikan (OCR)...")
+            
+            # Ambil screenshot gambar CAPTCHA langsung dari elemen DOM
+            captcha_png = captcha_img_element.screenshot_as_png
+            
+            # Solve CAPTCHA menggunakan OCR
+            captcha_text = ocr.classification(captcha_png)
+            logger.info(f"Hasil OCR: {captcha_text}")
+            
+            # Isi kolom CAPTCHA
+            driver.find_element(By.NAME, "captcha_answer").send_keys(captcha_text)
+            
+        except Exception as e:
+            logger.info("Form CAPTCHA tidak ditemukan atau error. Mengabaikan CAPTCHA.")
 
-    if login_failed or "login" in driver.current_url.lower():
-        msg = "❌ Gagal login: kemungkinan salah username/password atau CAPTCHA."
-        print(msg)
-        logger.warning(msg)
-        # Penamaan screenshot dengan timestamp
-        driver.save_screenshot(f"{photo_dir}/login_failed_{get_timestamp()}.png")
-        driver.quit()
-        exit()
+        # Temukan tombol submit dan klik
+        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+        time.sleep(2)
+
+        # --- Deteksi login gagal ---
+        login_failed = False
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.alert.alert-danger.icons-alert"))
+            )
+            login_failed = True
+        except:
+            pass
+
+        if login_failed or "login" in driver.current_url.lower():
+            msg = f"❌ Gagal login percobaan {attempt + 1}: kemungkinan salah username/password atau CAPTCHA."
+            print(msg)
+            logger.warning(msg)
+            
+            if attempt == MAX_LOGIN_RETRIES - 1:
+                # Gagal pada percobaan terakhir
+                driver.save_screenshot(f"{photo_dir}/login_failed_final_{get_timestamp()}.png")
+                driver.quit()
+                exit()
+            else:
+                # Coba lagi
+                continue
+        else:
+            login_success = True
+            break # Berhasil login, keluar dari loop
     
-    logger.info("Login berhasil. Menuju halaman absensi.")
-
+    if login_success:
+        logger.info("Login berhasil. Menuju halaman absensi.")
+    
     # --- Masuk halaman absensi ---
     driver.get("https://simkuliah.usk.ac.id/index.php/absensi")
     time.sleep(2)
